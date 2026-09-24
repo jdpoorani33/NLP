@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head></head>
+<body>
+    <nav th:fragment="navbar" class="navbar navbar-expand-lg navbar-dark bg-slate sticky-top shadow-sm">
+        <div class="container-fluid px-4">
+            <a class="navbar-brand d-flex align-items-center gap-2 font-bold" href="/dashboard">
+                <div class="brand-icon-bg">
+                    <i class="fas fa-graduation-cap"></i>
+                </div>
+                <span>NLP Student Ranking</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto ms-3 mb-2 mb-lg-0">
+                    <li class="nav-item">
+                        <a class="nav-link px-3" href="/dashboard"><i class="fas fa-chart-line me-1"></i> Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link px-3" href="/students"><i class="fas fa-user-graduate me-1"></i> Students</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link px-3" href="/classes"><i class="fas fa-chalkboard-teacher me-1"></i> Classes</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link px-3" href="/rankings"><i class="fas fa-trophy me-1"></i> Rankings</a>
+                    </li>
+                </ul>
+                <div class="d-flex align-items-center gap-2">
+                    <a href="/students/add" class="btn btn-emerald btn-sm rounded-pill px-3">
+                        <i class="fas fa-user-plus me-1"></i> Add Student
+                    </a>
+                    <form th:action="@{/students/recalculate-rankings}" method="post" class="d-inline">
+                        <button type="submit" class="btn btn-outline-light btn-sm rounded-pill px-3" title="Recalculate Rankings">
+                            <i class="fas fa-sync-alt me-1"></i> Recalculate Ranks
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </nav>
+</body>
+</html>

@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Profile Details - NLP Student Ranking Platform</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link th:href="@{/css/style.css}" rel="stylesheet">
+</head>
+<body class="d-flex flex-column min-vh-100">
+
+    <div th:replace="~{fragments/navbar :: navbar}"></div>
+
+    <div class="container-fluid px-4 py-4 flex-grow-1">
+
+        <!-- Flash Messages -->
+        <div th:if="${successMessage}" class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="fas fa-check-circle me-2"></i> <span th:text="${successMessage}"></span>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        <div th:if="${warningMessage}" class="alert alert-warning alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-triangle me-2"></i> <span th:text="${warningMessage}"></span>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        <div th:if="${errorMessage}" class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="fas fa-times-circle me-2"></i> <span th:text="${errorMessage}"></span>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+
+        <!-- Student Header Card -->
+        <div class="card border-0 shadow-sm rounded-4 mb-4 bg-slate text-white p-4">
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center fw-bold fs-3" style="width: 64px; height: 64px;">
+                        <span th:text="${#strings.substring(student.name, 0, 1)}">S</span>
+                    </div>
+                    <div>
+                        <div class="d-flex align-items-center gap-2">
+                            <h3 class="fw-bold mb-0" th:text="${student.name}">Rahul Kumar</h3>
+                            <span class="badge bg-warning text-dark fs-7" th:text="${'Rank #' + student.rank}">Rank #1</span>
+                        </div>
+                        <p class="text-white-50 mb-0">
+                            Reg: <strong class="text-white" th:text="${student.registerNumber}">23IT101</strong> &bull; 
+                            <span th:text="${student.studentClass != null ? student.studentClass.className : (student.department + ' - Year ' + student.year + ' - Sec ' + student.section)}">Dept</span> &bull; 
+                            Email: <span th:text="${student.email}">rahul@example.com</span>
+                        </p>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <a th:href="@{/students/{id}/edit(id=${student.id})}" class="btn btn-outline-light rounded-pill btn-sm px-3">
+                        <i class="fas fa-edit me-1"></i> Edit Info
+                    </a>
+                    <form th:action="@{/students/{id}/delete(id=${student.id})}" method="post" class="d-inline" onsubmit="return confirm('Are you sure you want to delete this student?');">
+                        <button type="submit" class="btn btn-outline-danger rounded-pill btn-sm px-3">
+                            <i class="fas fa-trash me-1"></i> Delete
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4">
+            
+            <!-- Left Column: Academic & LeetCode Info -->
+            <div class="col-lg-7">
+                
+                <!-- Academic Summary Card -->
+                <div class="card border-0 shadow-sm rounded-4 mb-4">
+                    <div class="card-header bg-white py-3 border-0">
+                        <h5 class="fw-bold mb-0 text-primary"><i class="fas fa-graduation-cap me-2"></i> Academic Information</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3 text-center">
+                            <div class="col-4">
+                                <div class="p-3 bg-light rounded-3">
+                                    <span class="text-muted d-block fs-7">CGPA</span>
+                                    <h4 class="fw-bold text-dark mb-0" th:text="${student.cgpa}">9.2</h4>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="p-3 bg-light rounded-3">
+                                    <span class="text-muted d-block fs-7">Department</span>
+                                    <strong class="text-dark d-block" th:text="${student.department}">IT</strong>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="p-3 bg-light rounded-3">
+                                    <span class="text-muted d-block fs-7">Year / Section</span>
+                                    <strong class="text-dark d-block" th:text="${'Yr ' + student.year + ' - ' + student.section}">Yr 3 - A</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- LeetCode Mapping & Data Card -->
+                <div class="card border-0 shadow-sm rounded-4">
+                    <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
+                        <h5 class="fw-bold mb-0 text-dark"><i class="fab fa-leetcode text-warning me-2"></i> LeetCode Competitive Performance</h5>
+                        <span th:if="${student.status.name() == 'CONNECTED'}" class="badge badge-connected"><i class="fas fa-check-circle me-1"></i> Connected</span>
+                        <span th:if="${student.status.name() == 'NOT_CONNECTED'}" class="badge badge-not-connected">Not Connected</span>
+                        <span th:if="${student.status.name() == 'ERROR'}" class="badge badge-error">Error / Offline</span>
+                    </div>
+                    <div class="card-body">
+
+                        <!-- Manual Profile Mapping Form (Req 7) -->
+                        <div class="bg-light p-3 rounded-3 border mb-4">
+                            <h6 class="fw-bold text-dark mb-1"><i class="fas fa-link me-1"></i> Manual LeetCode Connection Control</h6>
+                            <p class="text-muted fs-7 mb-2">Faculty must enter the username manually. System never auto-searches or guesses profiles.</p>
+                            
+                            <form th:action="@{/students/{id}/connect(id=${student.id})}" method="post" class="row g-2">
+                                <div class="col-sm-8">
+                                    <input type="text" name="leetcodeUsername" th:value="${student.leetcodeUsername}" class="form-control form-control-sm" placeholder="Enter exact LeetCode username" required>
+                                </div>
+                                <div class="col-sm-4 d-grid">
+                                    <button type="submit" class="btn btn-emerald btn-sm rounded-pill"><i class="fas fa-plug me-1"></i> Connect Profile</button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- LeetCode Stats Display -->
+                        <div th:if="${student.leetcodeUsername != null and !student.leetcodeUsername.isEmpty()}">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <div>
+                                    <span class="text-muted fs-7">Mapped Profile:</span>
+                                    <a th:href="${student.leetcodeProfileUrl}" target="_blank" class="fw-bold text-primary text-decoration-none ms-1">
+                                        https://leetcode.com/<span th:text="${student.leetcodeUsername}">username</span>/ <i class="fas fa-external-link-alt fs-7"></i>
+                                    </a>
+                                </div>
+                                <form th:action="@{/students/{id}/refresh(id=${student.id})}" method="post">
+                                    <button type="submit" class="btn btn-outline-primary btn-sm rounded-pill"><i class="fas fa-sync-alt me-1"></i> Refresh Data</button>
+                                </form>
+                            </div>
+
+                            <!-- Requirement 24 Preserved Data Notice -->
+                            <div th:if="${student.leetcodeData != null and student.leetcodeData.statusMessage != null and #strings.contains(student.leetcodeData.statusMessage, 'failed')}" 
+                                 class="alert alert-warning py-2 fs-7 mb-3">
+                                <i class="fas fa-exclamation-circle me-1"></i> <span th:text="${student.leetcodeData.statusMessage}">Last refresh failed — showing previous data.</span>
+                            </div>
+
+                            <!-- Problem Solved Counters -->
+                            <div class="row g-3 text-center mb-3">
+                                <div class="col-3">
+                                    <div class="p-2 border rounded-3 bg-white">
+                                        <span class="text-muted fs-7 d-block">Total Solved</span>
+                                        <h4 class="fw-bold text-dark mb-0" th:text="${student.leetcodeData != null ? student.leetcodeData.totalSolved : 0}">0</h4>
+                                    </div>
+                                </div>
+                                <div class="col-3">
+                                    <div class="p-2 border rounded-3 bg-white">
+                                        <span class="text-success fs-7 d-block">Easy</span>
+                                        <h4 class="fw-bold text-success mb-0" th:text="${student.leetcodeData != null ? student.leetcodeData.easySolved : 0}">0</h4>
+                                    </div>
+                                </div>
+                                <div class="col-3">
+                                    <div class="p-2 border rounded-3 bg-white">
+                                        <span class="text-warning fs-7 d-block">Medium</span>
+                                        <h4 class="fw-bold text-warning mb-0" th:text="${student.leetcodeData != null ? student.leetcodeData.mediumSolved : 0}">0</h4>
+                                    </div>
+                                </div>
+                                <div class="col-3">
+                                    <div class="p-2 border rounded-3 bg-white">
+                                        <span class="text-danger fs-7 d-block">Hard</span>
+                                        <h4 class="fw-bold text-danger mb-0" th:text="${student.leetcodeData != null ? student.leetcodeData.hardSolved : 0}">0</h4>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Contest Rating Stats -->
+                            <div class="row g-3 text-center">
+                                <div class="col-6">
+                                    <div class="p-3 bg-light rounded-3">
+                                        <span class="text-muted fs-7 d-block">Contest Rating</span>
+                                        <h4 class="fw-bold text-indigo mb-0" th:text="${student.leetcodeData != null ? student.leetcodeData.contestRating : 0}">0</h4>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="p-3 bg-light rounded-3">
+                                        <span class="text-muted fs-7 d-block">Contests Attended</span>
+                                        <h4 class="fw-bold text-dark mb-0" th:text="${student.leetcodeData != null ? student.leetcodeData.contestCount : 0}">0</h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div th:unless="${student.leetcodeUsername != null and !student.leetcodeUsername.isEmpty()}" class="text-center py-4 text-muted">
+                            <i class="fas fa-exclamation-circle fa-2x mb-2 text-warning d-block"></i>
+                            No LeetCode username mapped. Please enter username above and click "Connect Profile".
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Right Column: Performance & Score Breakdown -->
+            <div class="col-lg-5">
+                <div class="card border-0 shadow-sm rounded-4 sticky-top" style="top: 80px;">
+                    <div class="card-header bg-white py-3 border-0">
+                        <h5 class="fw-bold mb-0 text-dark"><i class="fas fa-chart-pie text-primary me-2"></i> Performance Score Breakdown</h5>
+                    </div>
+                    <div class="card-body">
+                        
+                        <!-- Overall Score Big Card -->
+                        <div class="text-center p-4 bg-primary bg-opacity-10 rounded-4 mb-4">
+                            <span class="text-muted text-uppercase fw-bold fs-7">CURRENT OVERALL SCORE</span>
+                            <h1 class="display-4 fw-bold text-primary mb-0" th:text="${student.overallScore}">88.5</h1>
+                            <span class="badge bg-primary rounded-pill px-3 py-1 fs-7" th:text="${'Rank #' + student.rank}">Rank #1</span>
+                        </div>
+
+                        <!-- Detailed Component Scores -->
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="fw-semibold fs-7"><i class="fas fa-book-open text-info me-1"></i> Academic Score (40%)</span>
+                                <span class="fw-bold" th:text="${student.academicScore + ' / 100'}">92.0 / 100</span>
+                            </div>
+                            <div class="progress mb-3" style="height: 8px;">
+                                <div class="progress-bar bg-info" th:style="'width: ' + ${student.academicScore} + '%'"></div>
+                            </div>
+
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="fw-semibold fs-7"><i class="fas fa-code text-warning me-1"></i> Problem Solving (40%)</span>
+                                <span class="fw-bold" th:text="${student.problemSolvingScore + ' / 100'}">85.0 / 100</span>
+                            </div>
+                            <div class="progress mb-3" style="height: 8px;">
+                                <div class="progress-bar bg-warning" th:style="'width: ' + ${student.problemSolvingScore} + '%'"></div>
+                            </div>
+
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="fw-semibold fs-7"><i class="fas fa-trophy text-danger me-1"></i> Contest Performance (20%)</span>
+                                <span class="fw-bold" th:text="${student.contestScore + ' / 100'}">70.0 / 100</span>
+                            </div>
+                            <div class="progress mb-4" style="height: 8px;">
+                                <div class="progress-bar bg-danger" th:style="'width: ' + ${student.contestScore} + '%'"></div>
+                            </div>
+                        </div>
+
+                        <div class="bg-light p-3 rounded-3 fs-7 text-muted border">
+                            <h6 class="fw-bold text-dark fs-7 mb-1"><i class="fas fa-info-circle me-1"></i> Calculation Details</h6>
+                            <ul class="mb-0 ps-3">
+                                <li>Academic Score: (CGPA / 10.0) &times; 100</li>
+                                <li>Problem Solving: Raw points (E&times;1 + M&times;2 + H&times;3) normalized</li>
+                                <li>Contest Score: Contest rating + participation bonus</li>
+                                <li>Deterministically calculated from stored DB values.</li>
+                            </ul>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <div th:replace="~{fragments/footer :: footer}"></div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script th:src="@{/js/script.js}"></script>
+</body>
+</html>
