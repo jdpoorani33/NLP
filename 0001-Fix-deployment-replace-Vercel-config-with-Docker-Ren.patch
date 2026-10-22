@@ -1,0 +1,431 @@
+From 4e1cb7b691deb561d5e73ebc46a578fa8d0b4c96 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 22 Oct 2026 03:58:43 +0000
+Subject: [PATCH] Fix deployment: replace Vercel config with Docker/Render
+ setup
+
+- Remove vercel.json (Vercel cannot run a Spring Boot server)
+- Add Dockerfile (multi-stage Maven build, Java 17) and .dockerignore
+- Add render.yaml blueprint
+- application.properties: read PORT and DB settings from env vars
+- Stop committing H2 database files; fix BOM-corrupted .gitignore
+- Fix infinite JSON recursion in /api endpoints (@JsonIgnore on StudentClass.students)
+- README: deployment instructions
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01Y57anc2e9v6WfHByEnXW9B
+---
+ .dockerignore                                 |   7 ++++
+ .gitignore                                    |   6 ++-
+ Dockerfile                                    |  23 +++++++++++
+ README.md                                     |  33 +++++++++++++++-
+ data/nlp_db.lock.db                           |   6 ---
+ data/nlp_db.mv.db                             | Bin 40960 -> 0 bytes
+ data/nlp_db.trace.db                          |  37 ------------------
+ render.yaml                                   |  13 ++++++
+ .../com/nlp/platform/model/StudentClass.java  |   2 +
+ src/main/resources/application.properties     |  36 ++++++++---------
+ vercel.json                                   |   5 ---
+ 11 files changed, 100 insertions(+), 68 deletions(-)
+ create mode 100644 .dockerignore
+ create mode 100644 Dockerfile
+ delete mode 100644 data/nlp_db.lock.db
+ delete mode 100644 data/nlp_db.mv.db
+ delete mode 100644 data/nlp_db.trace.db
+ create mode 100644 render.yaml
+ delete mode 100644 vercel.json
+
+diff --git a/.dockerignore b/.dockerignore
+new file mode 100644
+index 0000000..c709363
+--- /dev/null
++++ b/.dockerignore
+@@ -0,0 +1,7 @@
++target/
++.git/
++.idea/
++.vscode/
++data/
++*.db
++*.md
+diff --git a/.gitignore b/.gitignore
+index 2d0cbc1..c25cb9d 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,4 +1,4 @@
+-﻿target/
++target/
+ *.class
+ *.log
+ .idea/
+@@ -6,3 +6,7 @@
+ *.iml
+ .env
+ application-local.properties
++
++# Local H2 database files (never commit)
++data/
++*.db
+diff --git a/Dockerfile b/Dockerfile
+new file mode 100644
+index 0000000..326229c
+--- /dev/null
++++ b/Dockerfile
+@@ -0,0 +1,23 @@
++# ---------- Build stage ----------
++FROM maven:3.9-eclipse-temurin-17 AS build
++WORKDIR /app
++
++# Cache dependencies first
++COPY pom.xml .
++RUN mvn -B -q dependency:go-offline
++
++COPY src ./src
++RUN mvn -B -q package -DskipTests
++
++# ---------- Run stage ----------
++FROM eclipse-temurin:17-jre
++WORKDIR /app
++
++COPY --from=build /app/target/*.jar app.jar
++RUN mkdir -p /app/data
++
++# Render / Railway / Fly inject PORT; app falls back to 8080
++EXPOSE 8080
++ENV JAVA_OPTS="-Xmx384m -XX:+UseContainerSupport"
++
++ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
+diff --git a/README.md b/README.md
+index 69afa7e..df1f31b 100644
+--- a/README.md
++++ b/README.md
+@@ -142,7 +142,7 @@ By default, `application.properties` uses H2 file persistence stored at `./data/
+ 
+ 1. Open terminal in project root directory:
+    ```bash
+-   cd c:\Users\JD Poorani\Downloads\NLP
++   cd NLP
+    ```
+ 
+ 2. Build and run using Maven:
+@@ -163,6 +163,37 @@ By default, `application.properties` uses H2 file persistence stored at `./data/
+ 
+ ---
+ 
++## ☁️ Deployment
++
++> **Note:** This is a Java Spring Boot server. It **cannot run on Vercel or Netlify** (they only host static sites / Node serverless functions). Use a platform that runs Docker or Java.
++
++### Render (recommended, free tier)
++1. Push this repo to GitHub.
++2. On [render.com](https://render.com) → **New → Blueprint** → select this repo (it reads `render.yaml`).
++   Or **New → Web Service** → choose the repo → Runtime: **Docker**.
++3. Deploy. Render sets `PORT` automatically; the app listens on it.
++
++### Railway / Fly.io / any Docker host
++The included `Dockerfile` builds and runs the app:
++```bash
++docker build -t nlp-platform .
++docker run -p 8080:8080 nlp-platform
++```
++
++### Environment variables
++| Variable | Purpose | Default |
++|---|---|---|
++| `PORT` | HTTP port | `8080` |
++| `DB_URL` | JDBC URL (use MySQL in production) | H2 file at `./data/nlp_db` |
++| `DB_USERNAME` / `DB_PASSWORD` | DB credentials | `sa` / `password` |
++| `DB_DRIVER` | e.g. `com.mysql.cj.jdbc.Driver` | `org.h2.Driver` |
++| `DB_DIALECT` | e.g. `org.hibernate.dialect.MySQLDialect` | `org.hibernate.dialect.H2Dialect` |
++| `H2_CONSOLE_ENABLED` | Set `false` in production | `true` |
++
++⚠️ On free hosting tiers the container disk is wiped on every redeploy/restart, so the default H2 file database will reset. For data that persists, set the `DB_*` variables to a hosted MySQL database.
++
++---
++
+ ## 🌐 API Reference Endpoints
+ 
+ | Method | Endpoint | Description |
+diff --git a/data/nlp_db.lock.db b/data/nlp_db.lock.db
+deleted file mode 100644
+index 2e18a49..0000000
+--- a/data/nlp_db.lock.db
++++ /dev/null
+@@ -1,6 +0,0 @@
+-#FileLock
+-#Thu Sep 24 11:04:04 IST 2026
+-hostName=172.31.99.78
+-id=1a0d1e812d9f49fe0daed61498e27b13c0224589970
+-method=file
+-server=172.31.99.78\:60180
+diff --git a/data/nlp_db.mv.db b/data/nlp_db.mv.db
+deleted file mode 100644
+index d5a3b1798d89f773f1e2676b538d37cb5c75ee96..0000000000000000000000000000000000000000
+GIT binary patch
+literal 0
+HcmV?d00001
+
+literal 40960
+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
+
+diff --git a/data/nlp_db.trace.db b/data/nlp_db.trace.db
+deleted file mode 100644
+index 5287703..0000000
+--- a/data/nlp_db.trace.db
++++ /dev/null
+@@ -1,37 +0,0 @@
+-2026-09-24 10:25:40.954984+05:30 jdbc[3]: exception
+-org.h2.jdbc.JdbcSQLSyntaxErrorException: Syntax error in SQL statement "\000d\000a    create table classes (\000d\000a        id bigint generated by default as identity,\000d\000a        academic_year varchar(255),\000d\000a        class_name varchar(255) not null,\000d\000a        department varchar(255) not null,\000d\000a        section varchar(255) not null,\000d\000a        [*]year integer not null,\000d\000a        primary key (id)\000d\000a    )"; expected "identifier"; SQL statement:
+-
+-    create table classes (
+-        id bigint generated by default as identity,
+-        academic_year varchar(255),
+-        class_name varchar(255) not null,
+-        department varchar(255) not null,
+-        section varchar(255) not null,
+-        year integer not null,
+-        primary key (id)
+-    ) [42001-224]
+-2026-09-24 10:25:40.979565+05:30 jdbc[3]: exception
+-org.h2.jdbc.JdbcSQLSyntaxErrorException: Syntax error in SQL statement "\000d\000a    create table students (\000d\000a        id bigint generated by default as identity,\000d\000a        academic_score float(53),\000d\000a        cgpa float(53) not null,\000d\000a        contest_score float(53),\000d\000a        department varchar(255),\000d\000a        email varchar(255) not null,\000d\000a        last_updated timestamp(6),\000d\000a        leetcode_profile_url varchar(255),\000d\000a        leetcode_username varchar(255),\000d\000a        name varchar(255) not null,\000d\000a        overall_score float(53),\000d\000a        problem_solving_score float(53),\000d\000a        student_rank integer,\000d\000a        register_number varchar(255) not null,\000d\000a        section varchar(255),\000d\000a        status varchar(255) not null check (status in ('NOT_CONNECTED','CONNECTED','UPDATE_REQUIRED','ERROR')),\000d\000a        [*]year integer not null check ((year<=4) and (year>=1)),\000d\000a        leetcode_data_id bigint,\000d\000a        class_id bigint,\000d\000a        primary key (id)\000d\000a    )"; expected "identifier"; SQL statement:
+-
+-    create table students (
+-        id bigint generated by default as identity,
+-        academic_score float(53),
+-        cgpa float(53) not null,
+-        contest_score float(53),
+-        department varchar(255),
+-        email varchar(255) not null,
+-        last_updated timestamp(6),
+-        leetcode_profile_url varchar(255),
+-        leetcode_username varchar(255),
+-        name varchar(255) not null,
+-        overall_score float(53),
+-        problem_solving_score float(53),
+-        student_rank integer,
+-        register_number varchar(255) not null,
+-        section varchar(255),
+-        status varchar(255) not null check (status in ('NOT_CONNECTED','CONNECTED','UPDATE_REQUIRED','ERROR')),
+-        year integer not null check ((year<=4) and (year>=1)),
+-        leetcode_data_id bigint,
+-        class_id bigint,
+-        primary key (id)
+-    ) [42001-224]
+diff --git a/render.yaml b/render.yaml
+new file mode 100644
+index 0000000..6d4403f
+--- /dev/null
++++ b/render.yaml
+@@ -0,0 +1,13 @@
++services:
++  - type: web
++    name: nlp-platform
++    runtime: docker
++    plan: free
++    dockerfilePath: ./Dockerfile
++    healthCheckPath: /dashboard
++    envVars:
++      - key: JAVA_OPTS
++        value: "-Xmx384m -XX:+UseContainerSupport"
++      # To use MySQL instead of the built-in H2 file DB, set these in the Render dashboard:
++      # DB_URL, DB_USERNAME, DB_PASSWORD, DB_DRIVER=com.mysql.cj.jdbc.Driver,
++      # DB_DIALECT=org.hibernate.dialect.MySQLDialect
+diff --git a/src/main/java/com/nlp/platform/model/StudentClass.java b/src/main/java/com/nlp/platform/model/StudentClass.java
+index de53e28..bf65961 100644
+--- a/src/main/java/com/nlp/platform/model/StudentClass.java
++++ b/src/main/java/com/nlp/platform/model/StudentClass.java
+@@ -1,5 +1,6 @@
+ package com.nlp.platform.model;
+ 
++import com.fasterxml.jackson.annotation.JsonIgnore;
+ import jakarta.persistence.*;
+ import jakarta.validation.constraints.NotBlank;
+ import jakarta.validation.constraints.NotNull;
+@@ -33,6 +34,7 @@ public class StudentClass {
+     @Column(name = "academic_year")
+     private String academicYear;
+ 
++    @JsonIgnore // prevents infinite JSON recursion: Student -> StudentClass -> students -> ...
+     @OneToMany(mappedBy = "studentClass", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+     private List<Student> students = new ArrayList<>();
+ 
+diff --git a/src/main/resources/application.properties b/src/main/resources/application.properties
+index 7849c9e..b6ede01 100644
+--- a/src/main/resources/application.properties
++++ b/src/main/resources/application.properties
+@@ -1,27 +1,27 @@
+ # Application Configuration
+ spring.application.name=nlp-platform
+-server.port=8080
++# Hosting platforms (Render, Railway, Fly, Heroku) inject PORT at runtime
++server.port=${PORT:8080}
+ 
+-# Primary Relational Database Configuration
+-# Default Persistence: H2 File Database (Stores all records persistently in ./data/nlp_db directory)
+-# For production MySQL, uncomment the MySQL section below and comment out H2.
++# ------------------------------------------------------------------
++# Database
++# Defaults to an H2 file database in ./data (zero config, local dev).
++# For production, set these environment variables to point at MySQL:
++#   DB_URL=jdbc:mysql://<host>:3306/nlp_db?useSSL=true&serverTimezone=UTC&allowPublicKeyRetrieval=true
++#   DB_USERNAME=...   DB_PASSWORD=...
++#   DB_DRIVER=com.mysql.cj.jdbc.Driver
++#   DB_DIALECT=org.hibernate.dialect.MySQLDialect
++# ------------------------------------------------------------------
++spring.datasource.url=${DB_URL:jdbc:h2:file:./data/nlp_db}
++spring.datasource.driver-class-name=${DB_DRIVER:org.h2.Driver}
++spring.datasource.username=${DB_USERNAME:sa}
++spring.datasource.password=${DB_PASSWORD:password}
++spring.jpa.database-platform=${DB_DIALECT:org.hibernate.dialect.H2Dialect}
+ 
+-# --- H2 FILE DATABASE (PERSISTENT ON RESTART) ---
+-spring.datasource.url=jdbc:h2:file:./data/nlp_db;AUTO_SERVER=TRUE
+-spring.datasource.driverClassName=org.h2.Driver
+-spring.datasource.username=sa
+-spring.datasource.password=password
+-spring.jpa.database-platform=org.hibernate.dialect.H2Dialect
+-spring.h2.console.enabled=true
++# H2 console: on locally, turn off in production with H2_CONSOLE_ENABLED=false
++spring.h2.console.enabled=${H2_CONSOLE_ENABLED:true}
+ spring.h2.console.path=/h2-console
+ 
+-# --- MYSQL DATABASE CONFIGURATION (UNCOMMENT FOR MYSQL) ---
+-# spring.datasource.url=jdbc:mysql://localhost:3306/nlp_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+-# spring.datasource.username=root
+-# spring.datasource.password=rootpassword
+-# spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+-# spring.jpa.database-platform=org.hibernate.dialect.MySQLDialect
+-
+ # JPA & Hibernate Settings
+ spring.jpa.hibernate.ddl-auto=update
+ spring.jpa.show-sql=false
+diff --git a/vercel.json b/vercel.json
+deleted file mode 100644
+index de3aafe..0000000
+--- a/vercel.json
++++ /dev/null
+@@ -1,5 +0,0 @@
+-{
+-  "rewrites" : [
+-    { "source": "/(.*)", "destination":"/index.html"}
+-  ]
+-}
+-- 
+2.43.0
+
